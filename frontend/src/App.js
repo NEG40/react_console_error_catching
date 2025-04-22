@@ -11,15 +11,15 @@ function App() {
   };
 
   function handleLog() {
-    console.log(`Log ${generateRandomString(24)}`)
+    console.log(`console.log`)
   }
 
   function handleConsoleError() {
-    console.error(`Console Error: ${generateRandomString(24)}`)
+    console.error(new TypeError("Mimicking a TypeError"))
   }
 
   function handleUncaughtError() {
-    throw `Error ${generateRandomString(24)}`
+    throw `Random uncaught error: ${generateRandomString(24)}`
   }
 
   return (

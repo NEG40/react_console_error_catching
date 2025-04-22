@@ -6,11 +6,19 @@ export const ErrorContext = createContext();
 export const ErrorProvider = ({ children }) => {
   const [errors, setErrors] = useState([]);
 
-  const sendErrorToBackend = async (error) => {
-    const data = {
-      username: ['Chris', 'Elijah', 'Jessi'][Math.floor(Math.random() * 3)], // Get username from keycloak or similar
-      error: error
-    }
+  const sendErrorToBackend = async (error, type) => {
+    if (typeof error == 'object') error = JSON.stringify(error)
+            
+      // Filter out api key from error
+      error = error?.replace(/Bearer .+?"/g, '<api_key>"') || error
+
+      const data = {
+          username: ['Chris', 'Elijah', 'Jessi'][Math.floor(Math.random() * 3)], // Get username from keycloak or similar
+          url: window.location.href,
+          type,
+          error
+      }
+
 
     await axios.post('/errors', data)
       .then(res => console.log('Successfully submitted error'))
@@ -25,23 +33,33 @@ export const ErrorProvider = ({ children }) => {
   useEffect(() => {
     // Override console.error
     const originalConsoleError = console.error;
-    console.error = (...args) => {
-      const errorMessage = args.join(" ");
-      captureError(errorMessage);
-      originalConsoleError(...args); // Call the original console.error
+    function handleConsoleError(...args) {
+
+      const errorMessage =
+        args[0]?.response
+          ? JSON.stringify(args[0].response)
+          : args.join(" ")
+
+      if (errorMessage.includes('/errors')) return // Prevents an error loop
+
+      sendErrorToBackend(errorMessage, 'console.error');
+
+      // Call the original console.error
+      originalConsoleError(...args);
     };
+    console.error = handleConsoleError;
 
     // Handle uncaught exceptions
-    const handleGlobalError = (message, source, lineno, colno, error) => {
-      const errorMessage = `${message} at ${source}:${lineno}:${colno}`;
-      captureError(errorMessage);
+    function handleGlobalError(message, source, lineno, colno, error) {
+      const errorMessage = `${message} at ${source}:${lineno}:${colno}\n${error}`;
+
+      sendErrorToBackend(errorMessage, 'Uncaught exception');
     };
     window.onerror = handleGlobalError;
 
     // Handle unhandled promise rejections
-    const handleUnhandledRejection = (event) => {
-      const errorMessage = `Unhandled Promise Rejection: ${event.reason}`;
-      captureError(errorMessage);
+    function handleUnhandledRejection(event) {
+      sendErrorToBackend(event.reason, 'Unhandled Promise Rejection');
     };
     window.onunhandledrejection = handleUnhandledRejection;
 
@@ -51,7 +69,9 @@ export const ErrorProvider = ({ children }) => {
       window.onerror = null;
       window.onunhandledrejection = null;
     };
+
   }, []);
+
 
   return (
     <ErrorContext.Provider value={{ errors, captureError }}>
